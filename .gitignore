@@ -1,0 +1,6 @@
+secret*
+output
+*.yaml
+*.csv
+token.txt
+venv/
