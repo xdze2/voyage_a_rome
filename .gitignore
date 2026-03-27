@@ -1,6 +1,9 @@
-secret*
+*secret*
 output
 *.yaml
 *.csv
 token.txt
 venv/
+*.pyc
+__pycache__/
+*.egg-info
