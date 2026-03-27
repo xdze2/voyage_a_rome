@@ -18,6 +18,11 @@ from .api_utils import obtain_access_token
 DEFAULT_BASE = "https://api.francetravail.io/partenaire/rome-metiers/v1"
 
 
+from rich.pretty import pprint
+from rich.table import Table
+from rich.console import Console
+
+
 def request_api(
     base: str, path: str, token: str, params: Optional[Dict[str, Any]] = None
 ) -> Any:
@@ -81,100 +86,68 @@ def list_interest(ctx: click.Context, params_str: str):
         raise click.ClickException(str(e))
 
 
-@cli.command("search-metier")
+@cli.command("search")
 @click.option("--q", "query", required=True, help="search query")
-@click.option("--limit", default=20, help="max results")
+@click.option("--limit", default=10, help="max results")
 @click.pass_context
 def search_metier(
     ctx: click.Context,
     query: str,
     limit: int,
 ) -> None:
-    """Call the search_metier endpoint with a query parameter."""
+    """Call the search endpoint with a query parameter."""
     token = obtain_access_token()
-    params = {"q": query, "limit": limit}
-    try:
-        params.setdefault("champs", "libelle")
-        out = request_api(
-            ctx.obj["base_url"], "metiers/metier/requete", token, params=params
-        )
+    params = {
+        "q": query,  # Les mots recherchés
+        "limit": limit,
+        "champs": "riasecmineur,riasecmajeur,libelle,code",
+    }
+    response_data = request_api(
+        ctx.obj["base_url"], "metiers/metier/requete", token, params=params
+    )
+    if response_data is None or (
+        isinstance(response_data, dict) and not response_data.get("totalResultats", 0)
+    ):
+        click.echo("No results found. Exit.")
+        return
 
-        # extract list of hits
-        if isinstance(out, list):
-            hits = out
-        elif isinstance(out, dict):
-            # try common keys
-            for k in ("resultats", "metiers", "items", "data", "hits"):
-                if k in out and isinstance(out[k], list):
-                    hits = out[k]
-                    break
-            else:
-                # fallback: find first list value
-                hits = None
-                for v in out.values():
-                    if isinstance(v, list):
-                        hits = v
-                        break
-                if hits is None:
-                    # nothing to show
-                    click.echo(yaml.safe_dump(out, allow_unicode=True))
-                    return
-        else:
-            click.echo(yaml.safe_dump(out, allow_unicode=True))
-            return
+    total_hits = response_data.get("totalResultats")
+    click.echo(f"Nombre de resultats: {total_hits}")
 
-        # show enumerated results
-        from rich.table import Table
-        from rich.console import Console
-
-        console = Console()
-        table = Table("#", "code", "libelle")
-        for i, h in enumerate(hits[:limit], start=1):
-            code = (
-                h.get("code")
-                or h.get("romeCode")
-                or h.get("id")
-                or h.get("metier")
-                or ""
-            )
-            lib = h.get("libelle") or h.get("label") or h.get("name") or str(h)
-            table.add_row(str(i), str(code), str(lib))
-        console.print(table)
-
-        # ask user to select index to download
-        sel = click.prompt(
-            "Enter result number to download (0 to cancel)", type=int, default=0
-        )
-        if sel <= 0 or sel > len(hits[:limit]):
-            click.echo("Cancelled")
-            return
-        chosen = hits[sel - 1]
+    # Show enumerated results
+    hits = response_data.get("resultats", [])
+    console = Console()
+    table = Table("#", "code", "libelle")
+    for i, h in enumerate(hits[:limit], start=1):
         code = (
-            chosen.get("code")
-            or chosen.get("romeCode")
-            or chosen.get("id")
-            or chosen.get("metier")
+            h.get("code") or h.get("romeCode") or h.get("id") or h.get("metier") or ""
         )
-        if not code:
-            raise click.ClickException("Selected item has no code field")
+        lib = h.get("libelle") or h.get("label") or h.get("name") or str(h)
+        table.add_row(str(i), str(code), str(lib))
+    console.print(table)
 
-        # fetch full metier detail
-        metier = request_api(ctx.obj["base_url"], f"metiers/metier/{code}", token)
+    # Ask user to select index to download
+    sel = click.prompt(
+        "Enter result number to download (0 to cancel)", type=int, default=0
+    )
+    if sel <= 0 or sel > len(hits[:limit]):
+        click.echo("Cancelled")
+        return
+    chosen = hits[sel - 1]
+    code = chosen.get("code")
+    if not code:
+        raise click.ClickException("Selected item has no code field")
 
-        # ensure download dir
-        download_dir = "output"
-        try:
-            # try to get download-dir from args (backwards compat)
-            download_dir = ctx.params.get("download_dir") or download_dir
-        except Exception:
-            pass
-        os.makedirs(download_dir, exist_ok=True)
-        out_path = os.path.join(download_dir, f"{code}.yaml")
-        with open(out_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(metier, f, allow_unicode=True)
-        click.echo(f"Saved metier to {out_path}")
-    except Exception as e:
-        raise click.ClickException(str(e))
+    # fetch full metier detail
+    metier = request_api(ctx.obj["base_url"], f"metiers/metier/{code}", token)
+
+    # ensure download dir
+    download_dir = "output"
+    os.makedirs(download_dir, exist_ok=True)
+    out_path = os.path.join(download_dir, f"metier_{code}.yaml")
+    with open(out_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(metier, f, allow_unicode=True)
+    click.echo(f"Saved metier to {out_path}")
 
 
 if __name__ == "__main__":
