@@ -14,9 +14,6 @@ dependencies = [
   "click>=8.0",
 ]
 
-[project.scripts]
-romevoyage = "explo_rome.rome_api_cli:cli"
-
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["explo_rome*"]

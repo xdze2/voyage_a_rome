@@ -16,10 +16,13 @@ Données : API ROME 4.0 France Travail. Cible : app web statique GitHub Pages.
 ```
 voyage-a-rome/
 ├── data_pipeline/               # code Python (fetch, transform, prototypage)
-│   ├── explo_rome/              # package
+│   ├── explo_rome/              # package partagé
 │   │   ├── api_utils.py         # auth OAuth2 France Travail
-│   │   └── rome_api_cli.py      # CLI fetch fiches métier → data/raw/
-│   ├── scripts/
+│   │   └── client.py            # client HTTP ROME API (get, RateLimitedError)
+│   ├── scripts/                 # un script = une tâche
+│   │   ├── download_all.py          # télécharge toutes les fiches → data/raw/
+│   │   ├── search_metier.py         # recherche interactive + download d'une fiche
+│   │   ├── list_interest.py         # liste les centres d'intérêt
 │   │   ├── fiche_competences.py     # extrait compétences d'un YAML → CSV
 │   │   ├── liste_competences.py     # agrège compétences de tout data/raw/ → CSV
 │   │   └── competences_pair_elo.py  # démo ELO interactive en console (rich)
@@ -61,11 +64,14 @@ Ne jamais commiter ces fichiers.
 ```bash
 cd data_pipeline
 
-# Télécharger toutes les fiches (~2000 métiers, ~7 min)
+# Télécharger toutes les fiches (~2000 métiers, ~35 min à 1.1s/req)
 venv/bin/python scripts/download_all.py --out-dir ../data/raw
 
-# Télécharger une fiche métier (interactif)
-romevoyage search --q "graphiste"
+# Rechercher et télécharger une fiche (interactif)
+venv/bin/python scripts/search_metier.py --q "graphiste"
+
+# Lister les centres d'intérêt
+venv/bin/python scripts/list_interest.py
 
 # Extraire les compétences d'une fiche
 venv/bin/python scripts/fiche_competences.py ../data/raw/metier_E1205.yaml
