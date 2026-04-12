@@ -61,8 +61,11 @@ Ne jamais commiter ces fichiers.
 ```bash
 cd data_pipeline
 
-# Télécharger une fiche métier
-venv/bin/python -m explo_rome.rome_api_cli search --q "graphiste"
+# Télécharger toutes les fiches (~2000 métiers, ~7 min)
+venv/bin/python scripts/download_all.py --out-dir ../data/raw
+
+# Télécharger une fiche métier (interactif)
+romevoyage search --q "graphiste"
 
 # Extraire les compétences d'une fiche
 venv/bin/python scripts/fiche_competences.py ../data/raw/metier_E1205.yaml
@@ -95,10 +98,11 @@ Types : `COMPETENCE-DETAILLEE`, `MACRO-SAVOIR-FAIRE`, `MACRO-SAVOIR-ETRE-PROFESS
 
 ## Conventions
 
-- Code Python : scripts autonomes à la racine, package réutilisable dans `explo_rome/`
+- **CLI Python : toujours utiliser `click`, jamais `argparse`**
+- Code Python : scripts autonomes dans `data_pipeline/scripts/`, package réutilisable dans `explo_rome/`
 - Pas de tests pour l'instant (c'est un POC)
-- Le frontend cible sera du HTML/JS statique dans un dossier `web/` ou `docs/` (à décider)
-- Fichiers générés (`*.csv`, `results.yaml`, `output/`) : ne pas supprimer sans vérifier
+- Le frontend est en Svelte dans `webapp/`, build → `docs/` (GitHub Pages)
+- Fichiers générés (`data/raw/`, `data/dist/`) : gitignorés, ne pas supprimer sans vérifier
 
 ---
 

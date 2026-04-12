@@ -160,18 +160,6 @@ def search_metier(
     click.echo(f"Saved metier to {out_path}")
 
 
-@cli.command("swagger")
-@click.option("--out", default="swagger.json", show_default=True, help="output file")
-@click.pass_context
-def get_swagger(ctx: click.Context, out: str):
-    """Fetch the OpenAPI spec and save it locally."""
-    token = obtain_access_token()
-    data = request_api(ctx.obj["base_url"], "api-docs", token)
-    with open(out, "w", encoding="utf-8") as f:
-        import json
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    click.echo(f"Saved OpenAPI spec to {out}")
-
 
 if __name__ == "__main__":
     cli()
