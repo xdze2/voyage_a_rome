@@ -1,0 +1,5 @@
+secret.yaml
+*.secret.*
+token.txt
+token.secret.txt
+.env
