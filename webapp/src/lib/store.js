@@ -3,23 +3,27 @@ import { writable, get } from 'svelte/store'
 // --- Constants ---
 const ELO_DEFAULT = 1500
 const ELO_K = 32
+// Importance weights for computing job scores from macro ELOs
 const WEIGHTS = { principal: 3, standard: 1, emergent: 0.5 }
-const VOTING_TYPES = new Set([
-  'COMPETENCE-DETAILLEE',
-  'MACRO-SAVOIR-FAIRE',
-  'MACRO-SAVOIR-ETRE-PROFESSIONNEL',
-])
+// How much of a macro vote propagates to its children
+const CHILD_PROPAGATION = 0.3
 const TOP_N = 30
 export const MIN_VOTES = 8
 
 // --- Loaded data (module-level, not reactive) ---
-let skills = {}     // code -> { libelle, type, freq }
-let jobs = {}       // code -> { libelle, principal, standard, emergent }
-let skillJobs = {}  // code -> [job_codes]
-let jobSkillSets = {} // code -> Set<skill_code>
+let macros = {}        // macro_code -> { libelle, enjeu }
+let skillParent = {}   // child_skill_code -> macro_code
+let jobs = {}          // job_code -> { libelle, principal, standard, emergent, contexts }
+let ctxJobs = {}       // ctx_code -> [job_codes]
+let jobContextMap = {} // ctx_code -> { libelle, category }
+
+// Derived at load time
+let macroChildren = {} // macro_code -> [child_skill_codes]
+let jobMacroWeights = {} // job_code -> { macro_code -> weight }
+let macroJobs = {}       // macro_code -> [job_codes]
 
 // --- Mutable state ---
-let eloMap = {}         // skill_code -> float
+let eloMap = {}         // macro_code | ctx_code -> float
 let jobScoreCache = {}  // job_code -> float
 
 // --- Svelte stores ---
@@ -34,40 +38,47 @@ function expected(ra, rb) {
   return 1 / (1 + Math.pow(10, (rb - ra) / 400))
 }
 
-function applyVote(codeA, codeB, value) {
-  // value: -2..+2  positive = A preferred, 0 = draw
-  // K-factor scaled by vote magnitude
-  if (value === 0) {
-    const ea = expected(eloMap[codeA], eloMap[codeB])
-    eloMap[codeA] += ELO_K * (0.5 - ea)
-    eloMap[codeB] += ELO_K * (0.5 - (1 - ea))
-  } else {
-    const [winner, loser, k] = value > 0
-      ? [codeA, codeB, ELO_K * value]
-      : [codeB, codeA, ELO_K * -value]
-    const ea = expected(eloMap[winner], eloMap[loser])
-    eloMap[winner] += k * (1 - ea)
-    eloMap[loser]  += k * (0 - (1 - ea))
-  }
+function applyVote(codeA, codeB, outcome) {
+  // outcome: +1 = A wins, -1 = B wins, 0 = draw
+  const sa = outcome > 0 ? 1 : outcome < 0 ? 0 : 0.5
+  const ea = expected(eloMap[codeA] ?? ELO_DEFAULT, eloMap[codeB] ?? ELO_DEFAULT)
+  const delta = ELO_K * (sa - ea)
+  eloMap[codeA] = (eloMap[codeA] ?? ELO_DEFAULT) + delta
+  eloMap[codeB] = (eloMap[codeB] ?? ELO_DEFAULT) - delta
+
+  // Propagate partially to children
+  for (const child of macroChildren[codeA] ?? [])
+    eloMap[child] = (eloMap[child] ?? ELO_DEFAULT) + delta * CHILD_PROPAGATION
+  for (const child of macroChildren[codeB] ?? [])
+    eloMap[child] = (eloMap[child] ?? ELO_DEFAULT) - delta * CHILD_PROPAGATION
+}
+
+function applyDelta(code, delta) {
+  eloMap[code] = (eloMap[code] ?? ELO_DEFAULT) + delta
+  for (const child of macroChildren[code] ?? [])
+    eloMap[child] = (eloMap[child] ?? ELO_DEFAULT) + delta * CHILD_PROPAGATION
 }
 
 // --- Score ---
 function computeJobScore(jobCode) {
   const job = jobs[jobCode]
   let score = 0
-  for (const [bucket, weight] of Object.entries(WEIGHTS)) {
-    for (const skillCode of job[bucket] ?? []) {
-      score += (eloMap[skillCode] ?? ELO_DEFAULT) * weight
-    }
+  for (const [macroCode, w] of Object.entries(jobMacroWeights[jobCode] ?? {})) {
+    score += (eloMap[macroCode] ?? ELO_DEFAULT) * w
+  }
+  // Contexts contribute with weight 1
+  for (const ctx of job.contexts ?? []) {
+    score += (eloMap[ctx.code] ?? ELO_DEFAULT)
   }
   return score
 }
 
-function recomputeAffectedJobs(skillCodes) {
+function recomputeAffectedJobs(codes) {
   const affected = new Set()
-  for (const sc of skillCodes)
-    for (const jc of skillJobs[sc] ?? [])
-      affected.add(jc)
+  for (const code of codes) {
+    for (const jc of macroJobs[code] ?? []) affected.add(jc)
+    for (const jc of ctxJobs[code] ?? []) affected.add(jc)
+  }
   for (const jc of affected)
     jobScoreCache[jc] = computeJobScore(jc)
 }
@@ -88,55 +99,88 @@ function computeRankedJobs(n = 10) {
   }))
 }
 
-// --- Pair selection (active learning) ---
+// --- Pair selection ---
 function pickPair() {
   const top = getTopJobCodes(TOP_N)
 
+  // Collect all unique macro codes across top jobs
+  const allCodes = new Set()
+  for (const jobCode of top) {
+    for (const macroCode of Object.keys(jobMacroWeights[jobCode] ?? {}))
+      allCodes.add(macroCode)
+  }
+  const codes = Array.from(allCodes)
+  if (codes.length < 2) return null
+
   for (let attempt = 0; attempt < 60; attempt++) {
-    const jobA = top[Math.floor(Math.random() * top.length)]
-    const jobB = top[Math.floor(Math.random() * top.length)]
-    if (jobA === jobB) continue
+    const idxA = Math.floor(Math.random() * codes.length)
+    let idxB = Math.floor(Math.random() * (codes.length - 1))
+    if (idxB >= idxA) idxB++
+    const codeA = codes[idxA]
+    const codeB = codes[idxB]
 
-    const setA = jobSkillSets[jobA]
-    const setB = jobSkillSets[jobB]
-
-    // Skills exclusive to each job and of voteable type
-    const candidatesA = [...setA].filter(s => !setB.has(s) && VOTING_TYPES.has(skills[s]?.type))
-    const candidatesB = [...setB].filter(s => !setA.has(s) && VOTING_TYPES.has(skills[s]?.type))
-
-    if (!candidatesA.length || !candidatesB.length) continue
-
-    const codeA = candidatesA[Math.floor(Math.random() * candidatesA.length)]
-    const codeB = candidatesB[Math.floor(Math.random() * candidatesB.length)]
-
-    return { skillA: { code: codeA, ...skills[codeA] }, skillB: { code: codeB, ...skills[codeB] } }
+    return {
+      skillA: { code: codeA, ...macros[codeA] },
+      skillB: { code: codeB, ...macros[codeB] },
+    }
   }
   return null
 }
 
 function initState() {
-  for (const code of Object.keys(skills)) eloMap[code] = ELO_DEFAULT
+  eloMap = {}
+  for (const code of Object.keys(macros)) eloMap[code] = ELO_DEFAULT
+  for (const code of Object.keys(jobContextMap)) eloMap[code] = ELO_DEFAULT
+  jobScoreCache = {}
   for (const code of Object.keys(jobs)) jobScoreCache[code] = computeJobScore(code)
 }
 
 // --- Public API ---
 export async function loadData() {
   try {
-    const [s, j, sj] = await Promise.all([
-      fetch('./data/skills.json').then(r => r.json()),
+    const [m, sp, j] = await Promise.all([
+      fetch('./data/macros.json').then(r => r.json()),
+      fetch('./data/skill_parent.json').then(r => r.json()),
       fetch('./data/jobs.json').then(r => r.json()),
-      fetch('./data/skill_jobs.json').then(r => r.json()),
     ])
-    skills = s
+    macros = m
+    skillParent = sp
     jobs = j
-    skillJobs = sj
 
-    for (const [code, job] of Object.entries(jobs)) {
-      jobSkillSets[code] = new Set([
-        ...(job.principal ?? []),
-        ...(job.standard ?? []),
-        ...(job.emergent ?? []),
-      ])
+    // Build macroChildren (inverse of skillParent)
+    for (const [childCode, macroCode] of Object.entries(skillParent)) {
+      if (!macroChildren[macroCode]) macroChildren[macroCode] = []
+      macroChildren[macroCode].push(childCode)
+    }
+
+    // Build jobMacroWeights: for each job, aggregate bucket weights per macro
+    for (const [jobCode, job] of Object.entries(jobs)) {
+      jobMacroWeights[jobCode] = {}
+      for (const [bucket, weight] of Object.entries(WEIGHTS)) {
+        for (const skillCode of job[bucket] ?? []) {
+          const macroCode = skillParent[skillCode]
+          if (!macroCode) continue
+          jobMacroWeights[jobCode][macroCode] = (jobMacroWeights[jobCode][macroCode] ?? 0) + weight
+        }
+      }
+    }
+
+    // Build macroJobs reverse index
+    for (const [jobCode, weights] of Object.entries(jobMacroWeights)) {
+      for (const macroCode of Object.keys(weights)) {
+        if (!macroJobs[macroCode]) macroJobs[macroCode] = []
+        macroJobs[macroCode].push(jobCode)
+      }
+    }
+
+    // Build context reverse index and flat lookup
+    for (const [jobCode, job] of Object.entries(jobs)) {
+      for (const ctx of job.contexts ?? []) {
+        if (!ctxJobs[ctx.code]) ctxJobs[ctx.code] = []
+        ctxJobs[ctx.code].push(jobCode)
+        if (!jobContextMap[ctx.code])
+          jobContextMap[ctx.code] = { libelle: ctx.libelle, category: ctx.category }
+      }
     }
 
     initState()
@@ -152,7 +196,6 @@ export async function loadData() {
 export function vote(value) {
   const pair = get(currentPair)
   if (!pair) return
-
   applyVote(pair.skillA.code, pair.skillB.code, value)
   recomputeAffectedJobs([pair.skillA.code, pair.skillB.code])
   voteCount.update(n => n + 1)
@@ -160,26 +203,22 @@ export function vote(value) {
   currentPair.set(pickPair())
 }
 
-// Both skills liked equally — both go up
 export function voteBoth() {
   const pair = get(currentPair)
   if (!pair) return
-  const k = ELO_K * 0.5
-  eloMap[pair.skillA.code] += k
-  eloMap[pair.skillB.code] += k
+  applyDelta(pair.skillA.code, ELO_K * 0.5)
+  applyDelta(pair.skillB.code, ELO_K * 0.5)
   recomputeAffectedJobs([pair.skillA.code, pair.skillB.code])
   voteCount.update(n => n + 1)
   rankedJobs.set(computeRankedJobs(10))
   currentPair.set(pickPair())
 }
 
-// Neither skill liked — both go down
 export function voteNeither() {
   const pair = get(currentPair)
   if (!pair) return
-  const k = ELO_K * 0.5
-  eloMap[pair.skillA.code] -= k
-  eloMap[pair.skillB.code] -= k
+  applyDelta(pair.skillA.code, -ELO_K * 0.5)
+  applyDelta(pair.skillB.code, -ELO_K * 0.5)
   recomputeAffectedJobs([pair.skillA.code, pair.skillB.code])
   voteCount.update(n => n + 1)
   rankedJobs.set(computeRankedJobs(10))
@@ -195,9 +234,13 @@ export function showResults() {
 }
 
 export function restart() {
-  initState()
-  voteCount.set(0)
-  rankedJobs.set(computeRankedJobs(10))
-  currentPair.set(pickPair())
+  eloMap = {}
+  macroChildren = {}
+  jobMacroWeights = {}
+  macroJobs = {}
+  ctxJobs = {}
+  jobContextMap = {}
+  loadData()
   view.set('comparing')
+  voteCount.set(0)
 }

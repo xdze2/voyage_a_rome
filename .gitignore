@@ -1,5 +1,6 @@
 venv
 .venv
+data/
 *secret*
 *.egg-info
 token.txt

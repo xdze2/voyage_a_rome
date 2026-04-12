@@ -2,18 +2,31 @@
   import { fly } from 'svelte/transition'
   import { currentPair, voteCount, vote, voteBoth, voteNeither, skip, showResults, MIN_VOTES } from './store.js'
 
-  const TYPE_EMOJI = {
-    'COMPETENCE-DETAILLEE': '🛠️',
-    'MACRO-SAVOIR-FAIRE': '🧩',
-    'MACRO-SAVOIR-ETRE-PROFESSIONNEL': '🧠',
-    'SAVOIR': '📚',
-  }
-
-  const TYPE_LABEL = {
-    'COMPETENCE-DETAILLEE': 'savoir-faire',
-    'MACRO-SAVOIR-FAIRE': 'savoir-faire',
-    'MACRO-SAVOIR-ETRE-PROFESSIONNEL': 'savoir-être',
-    'SAVOIR': 'connaissance',
+  // Emoji per category group (bulk data nomenclature)
+  const CATEGORY_EMOJI = {
+    // Savoir-faire enjeux
+    'Animation': '🎭', 'Soin': '🩺', 'Management': '👥', 'Conception': '✏️',
+    'Communication': '💬', 'Communication, Multimédia': '📡', 'Création artistique': '🎨',
+    'Construction': '🏗️', 'Aménagement': '🏡', 'Transport': '🚛',
+    'Maintenance, Réparation': '🔧', 'Logistique': '📦', 'Organisation': '🗂️',
+    'Production, Fabrication': '⚙️', 'Relation client': '🤝', 'Recherche, Innovation': '🔬',
+    'Qualité': '✅', 'Développement commercial': '📈', 'Data et Nouvelles technologies': '💻',
+    'Conseil, Transmission': '🎓', 'Développement des compétences': '📚',
+    'Gestion administrative et comptable': '🗃️', 'Gestion des Ressources Humaines': '🧑‍💼',
+    'Gestion des stocks': '📋', 'Gestion et contrôle': '🔍', 'Stratégie de développement': '🧭',
+    'Prévention des risques': '⚠️', "Protection des personnes et de l'environnement": '🛡️',
+    'Pilotage et maîtrise des coûts': '💰', 'Droit, contentieux et négociation': '⚖️',
+    'Action publique': '🏛️',
+    // Savoir-être
+    'Savoir-être professionnels': '🧠',
+    // Savoirs
+    'Techniques professionnelles': '🛠️', "Domaines d'expertise": '📖',
+    'Produits, outils et matières': '🧰', 'Normes et procédés': '📐',
+    'Certifications et habilitations': '🎖️',
+    // Contextes de travail
+    'Conditions de travail et risques professionnels': '⛑️',
+    'Horaires et durée du travail': '🕐', 'Lieux et déplacements': '📍',
+    'Publics spécifiques': '👤', "Statut d'emploi": '📄', 'Types de structures': '🏢',
   }
 
   let selected = null
@@ -57,12 +70,12 @@
     {#key pair}
     <div class="choices-top" in:fly={{ y: 3, duration: 300, opacity: 0 }}>
       <button class="choice-btn" class:active={selected === 'A'} on:click={() => handle(() => vote(1), 'A')}>
-        <span class="choice-tag">{TYPE_EMOJI[pair.skillA.type] ?? '•'} {TYPE_LABEL[pair.skillA.type] ?? pair.skillA.type}</span>
+        <span class="choice-tag">{CATEGORY_EMOJI[pair.skillA.enjeu ?? pair.skillA.category] ?? '•'} {pair.skillA.enjeu ?? pair.skillA.category}</span>
         <span class="choice-label">{pair.skillA.libelle}</span>
       </button>
 
       <button class="choice-btn" class:active={selected === 'B'} on:click={() => handle(() => vote(-1), 'B')}>
-        <span class="choice-tag">{TYPE_EMOJI[pair.skillB.type] ?? '•'} {TYPE_LABEL[pair.skillB.type] ?? pair.skillB.type}</span>
+        <span class="choice-tag">{CATEGORY_EMOJI[pair.skillB.enjeu ?? pair.skillB.category] ?? '•'} {pair.skillB.enjeu ?? pair.skillB.category}</span>
         <span class="choice-label">{pair.skillB.libelle}</span>
       </button>
     </div>
