@@ -14,16 +14,25 @@ Données : API ROME 4.0 France Travail. Cible : app web statique GitHub Pages.
 ## Structure
 
 ```
-explo_rome/
-├── explo_rome/                  # package Python
-│   ├── api_utils.py             # auth OAuth2 France Travail
-│   └── rome_api_cli.py          # CLI fetch fiches métier → output/
-├── fiche_competences.py         # extrait compétences d'un YAML → CSV
-├── liste_competences.py         # agrège compétences de tout output/ → CSV
-├── competences_pair_elo.py      # démo ELO interactive en console (rich)
-├── output/                      # fiches YAML téléchargées (14 métiers sample)
-├── competences.csv              # agrégation compétences (généré)
-└── results.yaml                 # résultats ELO (généré, ne pas commiter)
+voyage-a-rome/
+├── data_pipeline/               # code Python (fetch, transform, prototypage)
+│   ├── explo_rome/              # package
+│   │   ├── api_utils.py         # auth OAuth2 France Travail
+│   │   └── rome_api_cli.py      # CLI fetch fiches métier → data/raw/
+│   ├── scripts/
+│   │   ├── fiche_competences.py     # extrait compétences d'un YAML → CSV
+│   │   ├── liste_competences.py     # agrège compétences de tout data/raw/ → CSV
+│   │   └── competences_pair_elo.py  # démo ELO interactive en console (rich)
+│   ├── requirements.txt
+│   └── pyproject.toml
+├── data/
+│   ├── raw/                     # fiches YAML téléchargées (gitignored)
+│   └── dist/                    # JSON générés pour le web (gitignored)
+├── webapp/                      # app Svelte (à construire)
+├── docs/                        # build Svelte → GitHub Pages
+├── claude_logs/                 # notes de session (gitignored)
+├── CLAUDE.md
+└── README.md
 ```
 
 ---
@@ -31,10 +40,10 @@ explo_rome/
 ## Environnement
 
 ```bash
-venv/bin/python   # toujours utiliser le venv du projet
+data_pipeline/venv/bin/python   # toujours utiliser le venv du projet
 ```
 
-Dépendances : `pyyaml`, `requests`, `rich`. Voir `requirements.txt`.
+Dépendances : `pyyaml`, `requests`, `rich`. Voir `data_pipeline/requirements.txt`.
 
 ---
 
@@ -50,17 +59,19 @@ Ne jamais commiter ces fichiers.
 ## Commandes utiles
 
 ```bash
+cd data_pipeline
+
 # Télécharger une fiche métier
 venv/bin/python -m explo_rome.rome_api_cli search --q "graphiste"
 
 # Extraire les compétences d'une fiche
-venv/bin/python fiche_competences.py output/metier_E1205.yaml
+venv/bin/python scripts/fiche_competences.py ../data/raw/metier_E1205.yaml
 
 # Agréger toutes les compétences
-venv/bin/python liste_competences.py --input-dir output --output competences.csv
+venv/bin/python scripts/liste_competences.py --input-dir ../data/raw --output ../data/dist/competences.csv
 
 # Lancer la démo ELO console
-venv/bin/python competences_pair_elo.py
+venv/bin/python scripts/competences_pair_elo.py
 ```
 
 ---
