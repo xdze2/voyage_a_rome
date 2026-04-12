@@ -24,8 +24,8 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from explo_rome.api_utils import obtain_access_token
-from explo_rome.client import RateLimitedError, get
+from explo_rome.api_utils import obtain_access_token, obtain_fresh_token
+from explo_rome.client import RateLimitedError, TokenExpiredError, get
 
 console = Console()
 
@@ -73,6 +73,9 @@ def download_all(out_dir: Path, delay: float, token: str):
                 out_path = out_dir / f"metier_{code}.yaml"
                 with open(out_path, "w", encoding="utf-8") as f:
                     yaml.safe_dump(fiche, f, allow_unicode=True)
+            except TokenExpiredError:
+                progress.stop()
+                raise
             except RateLimitedError as e:
                 progress.stop()
                 console.print(
@@ -92,6 +95,29 @@ def download_all(out_dir: Path, delay: float, token: str):
     console.print(f"\n[green]Done.[/green] {len(todo)} saved.")
 
 
+def _run_with_token(out_dir: Path, delay: float, token: str):
+    try:
+        download_all(out_dir, delay, token)
+    except TokenExpiredError:
+        console.print("\n[yellow]Token expired (401).[/yellow]")
+        choice = click.prompt(
+            "Delete token.secret.txt and retry?",
+            type=click.Choice(["delete", "abort"]),
+            default="abort",
+            show_default=True,
+        )
+        if choice == "abort":
+            raise SystemExit(0)
+        console.print("[yellow]Fetching new token...[/yellow]")
+        new_token = obtain_fresh_token()
+        console.print("[green]New token obtained. Retrying...[/green]")
+        try:
+            download_all(out_dir, delay, new_token)
+        except TokenExpiredError:
+            console.print("[red]Token still rejected after refresh. Check your credentials.[/red]")
+            raise SystemExit(1)
+
+
 @click.command()
 @click.option(
     "--out-dir",
@@ -109,7 +135,7 @@ def download_all(out_dir: Path, delay: float, token: str):
 def main(out_dir: str, delay: float):
     """Download all ROME métier fiches to data/raw/."""
     token = obtain_access_token()
-    download_all(Path(out_dir), delay, token)
+    _run_with_token(Path(out_dir), delay, token)
 
 
 if __name__ == "__main__":

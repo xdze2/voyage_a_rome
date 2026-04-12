@@ -3,8 +3,6 @@
 import requests
 from rich.console import Console
 
-from .api_utils import obtain_fresh_token
-
 BASE_URL = "https://api.francetravail.io/partenaire/rome-metiers/v1"
 console = Console()
 
@@ -15,16 +13,17 @@ class RateLimitedError(Exception):
         super().__init__(f"Rate limited — retry after {retry_after}s")
 
 
+class TokenExpiredError(Exception):
+    pass
+
+
 def get(path: str, token: str, params: dict = None) -> any:
     url = f"{BASE_URL}/{path.lstrip('/')}"
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     resp = requests.get(url, headers=headers, params=params, timeout=20)
 
     if resp.status_code == 401:
-        console.log("[yellow]Token expired — refreshing...[/yellow]")
-        token = obtain_fresh_token()
-        headers["Authorization"] = f"Bearer {token}"
-        resp = requests.get(url, headers=headers, params=params, timeout=20)
+        raise TokenExpiredError("Token rejected (401) — token may be expired")
 
     if resp.status_code == 429:
         retry_after = int(resp.headers.get("Retry-After", 60))
