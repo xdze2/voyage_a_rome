@@ -7,6 +7,8 @@ Données : base ROME 4.0 (France Travail, opendata). Aucun backend, aucune donn�
 
 ---
 
+![app_screenshot](app_screenshot_001.png)
+
 ## Le principe
 
 On vous présente deux compétences. Vous choisissez celle qui vous attire le plus.
