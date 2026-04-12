@@ -3,13 +3,10 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "explo_rome"
+name = "voyage-a-rome"
 version = "0.1.0"
-description = "Tools for exploiting ROME metier data"
-readme = "README.md"
+description = "Data pipeline for ROME métier data"
 requires-python = ">=3.8"
-license = { text = "MIT" }
-authors = [ { name = "Etienne", email = "etienne@example.com" } ]
 dependencies = [
   "requests>=2.28",
   "PyYAML>=6.0",
@@ -17,10 +14,9 @@ dependencies = [
   "click>=8.0",
 ]
 
-[project.urls]
-Homepage = "https://example.com"
+[project.scripts]
+romevoyage = "explo_rome.rome_api_cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["*"]
-exclude = ["tests*"]
+include = ["explo_rome*"]

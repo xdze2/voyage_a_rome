@@ -13,7 +13,7 @@ import click
 import requests
 import yaml
 
-from .api_utils import obtain_access_token
+from .api_utils import obtain_access_token, obtain_fresh_token
 
 DEFAULT_BASE = "https://api.francetravail.io/partenaire/rome-metiers/v1"
 
@@ -29,7 +29,17 @@ def request_api(
     url = base.rstrip("/") + "/" + path.lstrip("/")
     headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
     resp = requests.get(url, headers=headers, params=params, timeout=15)
-    resp.raise_for_status()
+
+    if resp.status_code == 401:
+        click.echo("Token expired — refreshing...", err=True)
+        token = obtain_fresh_token()
+        headers["Authorization"] = f"Bearer {token}"
+        resp = requests.get(url, headers=headers, params=params, timeout=15)
+
+    if not resp.ok:
+        raise click.ClickException(
+            f"API error {resp.status_code} on {url}\n  → {resp.text[:200]}"
+        )
     try:
         return resp.json()
     except Exception:
@@ -148,6 +158,19 @@ def search_metier(
     with open(out_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(metier, f, allow_unicode=True)
     click.echo(f"Saved metier to {out_path}")
+
+
+@cli.command("swagger")
+@click.option("--out", default="swagger.json", show_default=True, help="output file")
+@click.pass_context
+def get_swagger(ctx: click.Context, out: str):
+    """Fetch the OpenAPI spec and save it locally."""
+    token = obtain_access_token()
+    data = request_api(ctx.obj["base_url"], "api-docs", token)
+    with open(out, "w", encoding="utf-8") as f:
+        import json
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    click.echo(f"Saved OpenAPI spec to {out}")
 
 
 if __name__ == "__main__":
