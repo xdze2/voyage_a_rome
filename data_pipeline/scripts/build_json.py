@@ -65,7 +65,8 @@ def extract_job(doc: dict) -> tuple[dict, dict]:
 @click.command()
 @click.option("--in-dir", default="../data/raw", show_default=True, help="Directory with YAML fiches.")
 @click.option("--out-dir", default="../data/dist", show_default=True, help="Output directory for JSON files.")
-def main(in_dir: str, out_dir: str):
+@click.option("--web-dir", default="../webapp/public/data", show_default=True, help="Also copy JSON to webapp public dir.")
+def main(in_dir: str, out_dir: str, web_dir: str):
     """Build skills.json and jobs.json from YAML fiches."""
     in_path = Path(in_dir)
     out_path = Path(out_dir)
@@ -142,6 +143,14 @@ def main(in_dir: str, out_dir: str):
 
     for p in [skills_out, jobs_out, skill_jobs_out]:
         click.echo(f"  {p.name}: {p.stat().st_size / 1024:.0f} KB")
+
+    if web_dir:
+        import shutil
+        web_path = Path(web_dir)
+        web_path.mkdir(parents=True, exist_ok=True)
+        for p in [skills_out, jobs_out, skill_jobs_out]:
+            shutil.copy2(p, web_path / p.name)
+        click.echo(f"  → copied to {web_path}")
 
     click.echo("Done.")
 

@@ -1,9 +1,9 @@
-# Voyage à Rome
+# 🏛️ Voyage à ROME
 
 > Tous les chemins mènent à Rome. Ce POC aide à trouver lequel.
 
 Application web statique de découverte de métiers via classement de compétences par préférence.
-Données : base ROME 4.0 (France Travail, opendata). Aucun backend.
+Données : base ROME 4.0 (France Travail, opendata). Aucun backend, aucune donnée collectée.
 
 ---
 
@@ -12,51 +12,89 @@ Données : base ROME 4.0 (France Travail, opendata). Aucun backend.
 On vous présente deux compétences. Vous choisissez celle qui vous attire le plus.
 Après une vingtaine de choix, vous obtenez un top 10 de métiers qui correspondent à votre profil.
 
-Le classement utilise l'**ELO** (le même que les échecs). Les métiers sont scorés par la somme ELO de leurs compétences requises.
+Le classement utilise l'**ELO** (le même que les échecs) en mode active learning : on ne compare que les compétences qui ont du poids sur le classement courant.
 
 ---
 
 ## État du projet
 
-| Étape | Outil | État |
-|---|---|---|
-| Récupération fiches ROME (API) | `explo_rome/rome_api_cli.py` | ✅ |
-| Extraction compétences d'une fiche | `fiche_competences.py` | ✅ |
-| Agrégation toutes compétences | `liste_competences.py` | ✅ |
-| Démo ELO en console | `competences_pair_elo.py` | ✅ |
-| App web statique | — | 🔲 |
+| Étape | État |
+|---|---|
+| Récupération fiches ROME (API France Travail) | ✅ |
+| Transformation YAML → JSON statique | ✅ |
+| App web (Svelte, GitHub Pages) | ✅ en cours |
+
+---
+
+## Structure
+
+```
+data_pipeline/   scripts Python : fetch API, transformation JSON
+data/
+  raw/           fiches YAML téléchargées (~2 000 métiers)
+  dist/          JSON générés pour le web
+webapp/          app Svelte
+docs/            build → GitHub Pages
+```
+
+---
+
+## Générer les données
+
+### 1. Prérequis
+
+Credentials API France Travail dans `data_pipeline/secret.yaml` :
+```yaml
+client_id: xxx
+client_secret: xxx
+```
+Créer un compte sur https://francetravail.io pour obtenir les credentials.
+
+### 2. Télécharger les fiches ROME
+
+```bash
+cd data_pipeline
+pip install -e .
+python scripts/download_all.py --out-dir ../data/raw
+# ~2 000 métiers, ~35 min à 1 req/s
+```
+
+Interruptible et resumable — les fiches déjà téléchargées sont ignorées.
+
+### 3. Générer les JSON pour le web
+
+```bash
+python scripts/build_json.py --in-dir ../data/raw --out-dir ../data/dist
+# produit skills.json, jobs.json, skill_jobs.json
+# et les copie automatiquement dans webapp/public/data/
+```
+
+---
+
+## Lancer le webapp
+
+```bash
+cd webapp
+npm install
+npm run dev
+```
+
+Build pour GitHub Pages :
+```bash
+npm run build   # → docs/
+```
 
 ---
 
 ## Données ROME
 
-- ~2 000 métiers, ~30 000 compétences, ~30 compétences/métier
-- `output/` : échantillon de 14 fiches YAML (exploration)
-- `competences.csv` : agrégation des compétences (621 entrées sur l'échantillon)
-
 Types de compétences :
 
 | Type | Exemple |
 |---|---|
-| `COMPETENCE-DETAILLEE` | "Réaliser un storyboard" |
-| `MACRO-SAVOIR-FAIRE` | "Animer une équipe" |
-| `MACRO-SAVOIR-ETRE-PROFESSIONNEL` | "Faire preuve de créativité" |
-| `SAVOIR` | "Photoshop", "Typographie" |
+| `COMPETENCE-DETAILLEE` 🛠️ | "Réaliser un storyboard" |
+| `MACRO-SAVOIR-FAIRE` 🧩 | "Animer une équipe" |
+| `MACRO-SAVOIR-ETRE-PROFESSIONNEL` 🧠 | "Faire preuve de créativité" |
+| `SAVOIR` 📚 | "Photoshop", "Typographie" |
 
 Doc API : https://francetravail.io/produits-partages/catalogue/rome-4-0-metiers/documentation
-
----
-
-## Lancer la démo console
-
-```bash
-python liste_competences.py --input-dir output --output competences.csv
-python competences_pair_elo.py
-# a / b = choisir   = = égalité   espace = passer   q = quitter
-```
-
----
-
-## Cible
-
-HTML + JS statique, déployable sur GitHub Pages. Zéro serveur.

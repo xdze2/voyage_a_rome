@@ -1,238 +1,184 @@
 <script>
-  import { currentPair, voteCount, totalPairs, vote, skip, showResults } from './store.js'
-  import { skills } from './mockData.js'
+  import { fly } from 'svelte/transition'
+  import { currentPair, voteCount, vote, voteBoth, voteNeither, skip, showResults, MIN_VOTES } from './store.js'
 
-  const byId = Object.fromEntries(skills.map(s => [s.id, s]))
+  const TYPE_EMOJI = {
+    'COMPETENCE-DETAILLEE': '🛠️',
+    'MACRO-SAVOIR-FAIRE': '🧩',
+    'MACRO-SAVOIR-ETRE-PROFESSIONNEL': '🧠',
+    'SAVOIR': '📚',
+  }
 
-  $: [idA, idB] = $currentPair
-  $: skillA = byId[idA]
-  $: skillB = byId[idB]
-
-  const options = [
-    { value: -2, label: '−2', hint: 'nettement B' },
-    { value: -1, label: '−1', hint: 'plutôt B' },
-    { value:  0, label:  '0', hint: 'égalité' },
-    { value: +1, label: '+1', hint: 'plutôt A' },
-    { value: +2, label: '+2', hint: 'nettement A' },
-  ]
+  const TYPE_LABEL = {
+    'COMPETENCE-DETAILLEE': 'savoir-faire',
+    'MACRO-SAVOIR-FAIRE': 'savoir-faire',
+    'MACRO-SAVOIR-ETRE-PROFESSIONNEL': 'savoir-être',
+    'SAVOIR': 'connaissance',
+  }
 
   let selected = null
 
-  function handleVote(value) {
-    selected = value
-    setTimeout(() => { selected = null; vote(value) }, 150)
+  function handle(fn, key) {
+    selected = key
+    setTimeout(() => { selected = null; fn() }, 180)
   }
 
-  $: progress = Math.round(($voteCount / totalPairs) * 100)
-  $: canShowResults = $voteCount >= 8
+  $: canShowResults = $voteCount >= MIN_VOTES
+  $: pair = $currentPair
+  $: progress = Math.min($voteCount / MIN_VOTES * 100, 100)
+  $: remaining = Math.max(MIN_VOTES - $voteCount, 0)
 </script>
 
 <div class="wrapper">
-  <div class="meta">
-    <span class="counter">comparaison {$voteCount + 1} / {totalPairs}</span>
-    <div class="progress-bar"><div class="fill" style="width: {progress}%"></div></div>
-  </div>
-
-  <p class="question">Laquelle de ces activités vous attire le plus ?</p>
-
-  <div class="arena">
-    <div class="card" class:highlight={selected > 0}>
-      <span class="tag">A</span>
-      <p>{skillA?.label}</p>
+  {#if !pair}
+    <div class="no-pair">
+      Plus de paires disponibles.
+      <button on:click={showResults}>Voir les résultats</button>
+    </div>
+  {:else}
+    <div class="meta">
+      <div class="progress-track">
+        <div class="progress-fill" style="width: {progress}%"></div>
+      </div>
+      <span class="counter">
+        {#if canShowResults}
+          prêt !
+        {:else}
+          encore {remaining} avant les résultats
+        {/if}
+      </span>
+      {#if canShowResults}
+        <button class="results-btn" on:click={showResults}>voir les résultats →</button>
+      {/if}
     </div>
 
-    <span class="vs">vs</span>
+    <p class="question">Qu'est-ce qui vous attire le plus ?</p>
 
-    <div class="card" class:highlight={selected < 0}>
-      <span class="tag">B</span>
-      <p>{skillB?.label}</p>
+    {#key pair}
+    <div class="choices-top" in:fly={{ y: 3, duration: 300, opacity: 0 }}>
+      <button class="choice-btn" class:active={selected === 'A'} on:click={() => handle(() => vote(1), 'A')}>
+        <span class="choice-tag">{TYPE_EMOJI[pair.skillA.type] ?? '•'} {TYPE_LABEL[pair.skillA.type] ?? pair.skillA.type}</span>
+        <span class="choice-label">{pair.skillA.libelle}</span>
+      </button>
+
+      <button class="choice-btn" class:active={selected === 'B'} on:click={() => handle(() => vote(-1), 'B')}>
+        <span class="choice-tag">{TYPE_EMOJI[pair.skillB.type] ?? '•'} {TYPE_LABEL[pair.skillB.type] ?? pair.skillB.type}</span>
+        <span class="choice-label">{pair.skillB.libelle}</span>
+      </button>
     </div>
-  </div>
+    {/key}
 
-  <div class="vote-row">
-    <span class="hint-left">← B</span>
-    <div class="buttons">
-      {#each options as opt}
-        <button
-          class="vote-btn"
-          class:active={selected === opt.value}
-          class:negative={opt.value < 0}
-          class:neutral={opt.value === 0}
-          class:positive={opt.value > 0}
-          on:click={() => handleVote(opt.value)}
-          title={opt.hint}
-        >
-          {opt.label}
-        </button>
-      {/each}
+    <div class="choices-bottom">
+      <button class="secondary-btn" class:active={selected === 'both'}    on:click={() => handle(voteBoth, 'both')}>✌️ les deux, volontiers</button>
+      <button class="secondary-btn" class:active={selected === 'neither'} on:click={() => handle(voteNeither, 'neither')}>😱 ni l'un ni l'autre</button>
+      <button class="secondary-btn" class:active={selected === 'skip'}    on:click={() => handle(skip, 'skip')}>🤔 je passe</button>
     </div>
-    <span class="hint-right">A →</span>
-  </div>
-
-  <div class="actions">
-    <button class="link-btn" on:click={skip}>passer</button>
-    {#if canShowResults}
-      <button class="results-btn" on:click={showResults}>voir les résultats →</button>
-    {/if}
-  </div>
+  {/if}
 </div>
 
 <style>
   .wrapper {
     width: 100%;
-    max-width: 680px;
+    max-width: 720px;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1.25rem;
   }
 
   .meta {
     display: flex;
     align-items: center;
-    gap: 1rem;
-  }
-
-  .counter {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-  }
-
-  .progress-bar {
-    flex: 1;
-    height: 4px;
-    background: var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-
-  .fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 2px;
-    transition: width 0.3s ease;
-  }
-
-  .question {
-    font-size: 0.9rem;
-    color: var(--text-muted);
-  }
-
-  .arena {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    gap: 1rem;
-    align-items: center;
-  }
-
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1.25rem;
-    min-height: 110px;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    box-shadow: var(--shadow);
-    transition: border-color 0.15s, background 0.15s;
-  }
-
-  .card.highlight {
-    border-color: var(--accent);
-    background: var(--accent-light);
-  }
-
-  .tag {
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: var(--text-muted);
-    letter-spacing: 0.05em;
-  }
-
-  .card p {
-    font-size: 0.95rem;
-    line-height: 1.4;
-  }
-
-  .vs {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    font-style: italic;
-  }
-
-  .vote-row {
-    display: flex;
-    align-items: center;
     gap: 0.75rem;
   }
 
-  .hint-left, .hint-right {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    white-space: nowrap;
+  .progress-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
   }
 
-  .buttons {
-    flex: 1;
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+
+  .counter { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
+
+  .question { font-size: 0.9rem; color: var(--text-muted); }
+
+  /* Top row: A and B */
+  .choices-top {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .choice-btn {
     display: flex;
-    gap: 0.4rem;
-    justify-content: center;
-  }
-
-  .vote-btn {
-    flex: 1;
-    max-width: 60px;
-    padding: 0.6rem 0;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 1.4rem;
+    min-height: 140px;
+    justify-content: flex-start;
+    text-align: left;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface);
-    font-size: 0.9rem;
-    font-weight: 600;
+    box-shadow: var(--shadow);
     cursor: pointer;
-    transition: background 0.12s, border-color 0.12s, color 0.12s;
+    transition: border-color 0.15s, background 0.15s, transform 0.12s;
   }
 
-  .vote-btn:hover { border-color: #aaa; }
+  .choice-btn:hover { border-color: #aaa; background: #f0efec; transform: translateY(-1px); }
+  .choice-btn.active { border-color: #aaa; background: #f0efec; transform: scale(0.97); }
 
-  .vote-btn.negative  { color: var(--negative); }
-  .vote-btn.neutral   { color: var(--neutral); }
-  .vote-btn.positive  { color: var(--positive); }
-
-  .vote-btn.active.negative { background: #fdf0ee; border-color: var(--negative); }
-  .vote-btn.active.neutral  { background: #f0f0f0; border-color: #888; }
-  .vote-btn.active.positive { background: #edfaf3; border-color: var(--positive); }
-
-  .actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .link-btn {
-    background: none;
-    border: none;
+  .choice-tag {
+    font-size: 0.75rem;
+    font-weight: 600;
     color: var(--text-muted);
-    font-size: 0.85rem;
-    cursor: pointer;
-    padding: 0;
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
   }
 
-  .link-btn:hover { color: var(--text); }
+  .choice-label { font-size: 1.15rem; font-weight: 500; line-height: 1.4; color: var(--text); }
 
-  .results-btn {
-    background: var(--accent);
-    color: white;
-    border: none;
+  /* Bottom row: les deux / aucun / sans avis */
+  .choices-bottom {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .secondary-btn {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 0.5rem 1rem;
-    font-size: 0.9rem;
-    font-weight: 600;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text);
     cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.12s;
+  }
+
+  .secondary-btn:hover { border-color: #aaa; background: #f0efec; }
+  .secondary-btn.active { background: #f0efec; border-color: #aaa; transform: scale(0.97); }
+
+
+  /* Results button */
+  .results-btn {
+    background: var(--accent); color: white; border: none;
+    border-radius: var(--radius); padding: 0.4rem 0.9rem;
+    font-size: 0.85rem; font-weight: 600; cursor: pointer;
     transition: opacity 0.15s;
   }
-
   .results-btn:hover { opacity: 0.85; }
+
+  .no-pair { color: var(--text-muted); font-size: 0.9rem; }
+  .no-pair button { background: none; border: none; color: var(--accent); cursor: pointer; text-decoration: underline; }
 </style>
