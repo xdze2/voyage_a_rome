@@ -2,7 +2,9 @@
   import { rankedJobs, voteCount, restart, view } from './store.js'
 
   $: top = $rankedJobs
-  $: maxScore = Math.max(...top.map(j => j.score), 1)
+  $: minScore = Math.min(...top.map(j => j.score))
+  $: maxScore = Math.max(...top.map(j => j.score))
+  $: scoreRange = Math.max(maxScore - minScore, 1)
 </script>
 
 <div class="wrapper">
@@ -24,10 +26,10 @@
           </a>
           <span class="code">{job.code}</span>
           <div class="bar-wrap">
-            <div class="bar" style="width: {Math.max(0, job.score / maxScore * 100)}%"></div>
+            <div class="bar" style="width: {Math.max(0, (job.score - minScore) / scoreRange * 100)}%"></div>
           </div>
         </div>
-        <span class="score">{job.score > 0 ? '+' : ''}{job.score}</span>
+        <span class="score">{job.score - minScore > 0 ? '+' : ''}{job.score - minScore}</span>
       </li>
     {/each}
   </ol>
