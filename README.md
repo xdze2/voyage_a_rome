@@ -1,6 +1,6 @@
 # 🏛️ Voyage à ROME
 
-> Tous les chemins mènent à Rome. Ce POC aide à trouver lequel.
+> Tous les métiers mènent à ROME. Ce POC aide à trouver lequel.
 
 Application web statique de découverte de métiers via classement de compétences par préférence.
 Données : base ROME 4.0 (France Travail, opendata). Aucun backend, aucune donnée collectée.
@@ -80,13 +80,5 @@ venv/bin/python scripts/build_json.py --in-dir ../data/RefRomeJson --out-dir ../
 
 ## Données ROME
 
-Types de compétences :
-
-| Type | Exemple |
-|---|---|
-| `COMPETENCE-DETAILLEE` 🛠️ | "Réaliser un storyboard" |
-| `MACRO-SAVOIR-FAIRE` 🧩 | "Animer une équipe" |
-| `MACRO-SAVOIR-ETRE-PROFESSIONNEL` 🧠 | "Faire preuve de créativité" |
-| `SAVOIR` 📚 | "Photoshop", "Typographie" |
-
-Doc API : https://francetravail.io/produits-partages/catalogue/rome-4-0-metiers/documentation
+- Voir le resumé [ROME_data_description.md](./ROME_data_description.md)
+- Doc officiel : https://francetravail.io/produits-partages/catalogue/rome-4-0-metiers/documentation
