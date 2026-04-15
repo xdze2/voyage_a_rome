@@ -22,53 +22,22 @@ Le classement utilise l'**ELO** (le même que les échecs) en mode active learni
 
 | Étape | État |
 |---|---|
-| Récupération fiches ROME (API France Travail) | ✅ |
-| Transformation YAML → JSON statique | ✅ |
-| App web (Svelte, GitHub Pages) | ✅ en cours |
+| Récupération données ROME (bulk data.gouv.fr) | ✅ |
+| Transformation JSON → JSON statique web | ✅ |
+| App web (Svelte, GitHub Pages) — UI/UX | ✅ |
+| Algorithme ELO — convergence | ⚠️ non fonctionnel |
 
 ---
 
 ## Structure
 
 ```
-data_pipeline/   scripts Python : fetch API, transformation JSON
+data_pipeline/   scripts Python : transformation JSON
 data/
-  raw/           fiches YAML téléchargées (~2 000 métiers)
-  dist/          JSON générés pour le web
+  RefRomeJson/   données bulk ROME (gitignored)
+  dist/          JSON générés pour le web (gitignored)
 webapp/          app Svelte
 docs/            build → GitHub Pages
-```
-
----
-
-## Générer les données
-
-### 1. Prérequis
-
-Credentials API France Travail dans `data_pipeline/secret.yaml` :
-```yaml
-client_id: xxx
-client_secret: xxx
-```
-Créer un compte sur https://francetravail.io pour obtenir les credentials.
-
-### 2. Télécharger les fiches ROME
-
-```bash
-cd data_pipeline
-pip install -e .
-python scripts/download_all.py --out-dir ../data/raw
-# ~2 000 métiers, ~35 min à 1 req/s
-```
-
-Interruptible et resumable — les fiches déjà téléchargées sont ignorées.
-
-### 3. Générer les JSON pour le web
-
-```bash
-python scripts/build_json.py --in-dir ../data/raw --out-dir ../data/dist
-# produit skills.json, jobs.json, skill_jobs.json
-# et les copie automatiquement dans webapp/public/data/
 ```
 
 ---
@@ -81,9 +50,30 @@ npm install
 npm run dev
 ```
 
+Les données sont déjà dans `webapp/public/data/`. Aucune credential nécessaire.
+
 Build pour GitHub Pages :
 ```bash
 npm run build   # → docs/
+```
+
+---
+
+## Regénérer les données
+
+### 1. Télécharger le bulk ROME
+
+```bash
+cd data_pipeline
+venv/bin/python scripts/download_bulk.py --out-dir ../data/RefRomeJson
+```
+
+### 2. Générer les JSON pour le web
+
+```bash
+venv/bin/python scripts/build_json.py --in-dir ../data/RefRomeJson --out-dir ../data/dist
+# produit macros.json, jobs.json, skill_parent.json, skills.json, skill_jobs.json
+# et les copie automatiquement dans webapp/public/data/
 ```
 
 ---
